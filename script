@@ -1,0 +1,76 @@
+const int RledPin = 9;
+const int GledPin = 10;
+const int BledPin = 11;
+const int buttonPin = 8;
+
+int mood = 0;
+const int neutralmood = 10;  // 中性值
+unsigned long previousMillis = 0;
+int fadingDirection = 1;
+int buttonState = 0;
+bool ButtonPressed = false;
+unsigned long touchedTimer = 0;
+unsigned long reducedTimer = 0;
+const long unTouchInterval = 5000;  // 5 秒未按按鈕開始自動降低心情
+const long reducedInterval = 1000;  // 每秒降低一次心情
+
+void setup() {
+  pinMode(buttonPin, INPUT);
+  pinMode(RledPin, OUTPUT);
+  pinMode(GledPin, OUTPUT);
+  pinMode(BledPin, OUTPUT);
+
+  mood = neutralmood;
+  previousMillis = millis();
+  reducedTimer = millis();
+  touchedTimer = 0;
+}
+
+void loop() {
+  float brightnessInterval = 255.0 / 10.0;  // 每一級 mood 對應的亮度變化量
+
+  // --- 顏色變化區段（紅 → 藍 → 綠 循環） ---
+  if (mood >= neutralmood) {
+    // mood >= 10 時，紅固定最亮，藍色增加、綠色減少
+    analogWrite(RledPin, 255);
+    analogWrite(BledPin, brightnessInterval * (mood - neutralmood));
+    analogWrite(GledPin, 255 - brightnessInterval * (mood - neutralmood));
+  } else {
+    // mood < 10 時，紅色減少、藍色增加、綠固定最亮
+    analogWrite(RledPin, 255 - brightnessInterval * (neutralmood - mood));
+    analogWrite(BledPin, brightnessInterval * (neutralmood - mood));
+    analogWrite(GledPin, 255);
+  }
+
+  // --- 自動心情變化 ---
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis > 1000) {  // 每秒變化一次
+    mood = mood + fadingDirection;
+    if (mood >= 20 || mood <= 0) {
+      fadingDirection = -fadingDirection;  // 到達邊界反轉方向
+    }
+    previousMillis = currentMillis;
+  }
+
+  // --- 按鈕控制 ---
+  buttonState = digitalRead(buttonPin);
+  if (buttonState == HIGH && !ButtonPressed) {
+    mood = mood + 1;
+    if (mood > 20) mood = 20;
+    touchedTimer = millis();
+    ButtonPressed = true;
+  }
+  if (buttonState == LOW && ButtonPressed) {
+    ButtonPressed = false;
+  }
+
+  // --- 若超過 unTouchInterval 未按下按鈕，自動降低 mood ---
+  unsigned long currentTimer = millis();
+  if (currentTimer - touchedTimer > unTouchInterval) {
+    if (currentTimer - reducedTimer > reducedInterval) {
+      mood = mood - 1;
+      if (mood < 0) mood = 0;
+      reducedTimer = currentTimer;
+    }
+  }
+}
